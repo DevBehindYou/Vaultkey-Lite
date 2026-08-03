@@ -17,6 +17,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -28,6 +29,7 @@ import androidx.compose.ui.Modifier
 import com.vaultkey.core.VaultKeyGraph
 
 /** Matches SCR.02 in 03-ui-ux-mockup.html. */
+@OptIn(ExperimentalMaterial3Api::class) // material3 TopAppBar is still experimental
 @Composable
 fun VaultListScreen(onAddCredential: () -> Unit, onOpenSettings: () -> Unit) {
     val credentials by remember { VaultKeyGraph.credentialRepository.observeAll() }

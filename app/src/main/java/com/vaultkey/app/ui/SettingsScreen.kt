@@ -10,6 +10,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -21,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import com.vaultkey.core.VaultKeyGraph
 
 /** Matches SCR.05 in 03-ui-ux-mockup.html. */
+@OptIn(ExperimentalMaterial3Api::class) // material3 TopAppBar/ListItem are still experimental
 @Composable
 fun SettingsScreen() {
     val context = LocalContext.current
