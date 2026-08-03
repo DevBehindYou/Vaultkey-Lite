@@ -36,7 +36,7 @@ jobs:
         with:
           gradle-version: "8.9"
 
-      - name: Unit tests (vault-core: crypto round-trip tests)
+      - name: "Unit tests (vault-core: crypto round-trip tests)"
         run: gradle :vault-core:testDebugUnitTest --stacktrace
 
       - name: Lint
