@@ -49,7 +49,9 @@ class Converters {
     fun toMatchType(value: String): MatchType = MatchType.valueOf(value)
 }
 
-@Database(entities = [CredentialEntity::class, CredentialMatchEntity::class], version = 1)
+// exportSchema = false: no schema JSON is emitted (we use fallbackToDestructiveMigration,
+// not versioned migration testing) — silences Room's "schema export directory not provided" warning.
+@Database(entities = [CredentialEntity::class, CredentialMatchEntity::class], version = 1, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class VaultDatabase : RoomDatabase() {
     abstract fun credentialDao(): CredentialDao

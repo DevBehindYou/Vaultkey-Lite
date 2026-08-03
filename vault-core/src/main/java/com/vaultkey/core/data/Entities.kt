@@ -2,6 +2,7 @@ package com.vaultkey.core.data
 
 import androidx.room.Entity
 import androidx.room.ForeignKey
+import androidx.room.Index
 import androidx.room.PrimaryKey
 import java.util.UUID
 
@@ -39,7 +40,10 @@ data class CredentialEntity(
         parentColumns = ["id"],
         childColumns = ["credentialId"],
         onDelete = ForeignKey.CASCADE
-    )]
+    )],
+    // Index the FK column: the lookup joins on it, and Room warns about full
+    // table scans on parent updates/deletes without it.
+    indices = [Index("credentialId")]
 )
 data class CredentialMatchEntity(
     @PrimaryKey(autoGenerate = true) val matchId: Long = 0,

@@ -67,13 +67,15 @@ class CredentialSuggestionInjector(
     private fun looksLikeLoginField(info: EditorInfo): Boolean {
         val type = info.inputType
         val textVariation = type and android.text.InputType.TYPE_MASK_VARIATION
+        // Note: Android has no "username" text variation — username fields are
+        // surfaced via autofill hints (AUTOFILL_HINT_USERNAME), not inputType,
+        // so an IME can only key off password/email variations here.
         val isTextLogin =
             (type and android.text.InputType.TYPE_MASK_CLASS) == android.text.InputType.TYPE_CLASS_TEXT &&
                 (textVariation == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD ||
                     textVariation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
                     textVariation == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
-                    textVariation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
-                    textVariation == android.text.InputType.TYPE_TEXT_VARIATION_USERNAME)
+                    textVariation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS)
         // Numeric PIN fields (e.g. banking apps) report TYPE_CLASS_NUMBER.
         val isNumberPassword =
             (type and android.text.InputType.TYPE_MASK_CLASS) == android.text.InputType.TYPE_CLASS_NUMBER &&
