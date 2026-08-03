@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      No <uses-permission> entries here on purpose — this module has no
+      reason to ever request INTERNET, and its absence across the whole app
+      is the auditable proof described in 02-architecture.md's threat model.
+    -->
+</manifest>
