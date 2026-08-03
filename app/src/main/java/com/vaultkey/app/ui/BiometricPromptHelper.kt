@@ -55,6 +55,7 @@ object BiometricPromptHelper {
             .setTitle(title)
             .setNegativeButtonText("Use password instead")
             .build()
-        prompt.authenticate(BiometricPrompt.CryptoObject(cipher), info)
+        // authenticate(promptInfo, cryptoObject) — PromptInfo first, then the CryptoObject.
+        prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
     }
 }
