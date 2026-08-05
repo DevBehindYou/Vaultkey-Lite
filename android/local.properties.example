@@ -1,0 +1,7 @@
+# Copy this to android/local.properties (untracked — see .gitignore) and fill
+# in your own paths. The `flutter build`/`flutter run` commands normally
+# write and update this file for you automatically, so you often don't need
+# to touch it by hand at all — it's included here just so the required keys
+# are documented.
+sdk.dir=/path/to/your/Android/sdk
+flutter.sdk=/path/to/your/flutter

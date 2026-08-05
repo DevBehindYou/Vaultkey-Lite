@@ -2,23 +2,43 @@
 
 This is the written companion to `03-ui-ux-mockup.html` (the visual mockup) —
 covering the screen inventory, component list, states, accessibility, and a
-mobile-optimization review of what was actually built in the `app` module's
-Compose code. Where the built screens differ from the mockup, that's called
-out explicitly rather than glossed over.
+mobile-optimization review. **Updated for the Flutter migration**: the UI
+described below is now `lib/` (Dart), not the archived Compose version in
+`legacy_compose_ui/app-compose-reference/` — screen behavior is equivalent,
+but the file references below point at the current Dart implementation.
 
 ## Screen inventory
 
-| # | Screen | Composable | Matches mockup |
+| # | Screen | File | Matches mockup |
 |---|---|---|---|
-| 1 | Unlock / create vault | `UnlockScreen` | SCR.01 |
-| 2 | Vault list + search | `VaultListScreen` | SCR.02 |
-| 3 | Suggestion popup (in-keyboard, not a screen) | `SimpleVaultIME.renderSuggestions()` | SCR.03 |
-| 4 | Add login | `AddEditCredentialScreen` | SCR.04 — **diverges**: the mockup shows one "Matches" field; the built screen uses two explicit optional fields (website domain, app package) instead — see the file's own doc comment for why guessing the type from one field was rejected during the build. |
-| 5 | Settings | `SettingsScreen` | SCR.05 |
+| 1 | Unlock / create vault | `lib/screens/unlock_screen.dart` | SCR.01 |
+| 2 | Vault list + search + detail dialog | `lib/screens/vault_list_screen.dart` | SCR.02 |
+| 3 | Suggestion popup (in-keyboard, not a screen) | `android/keyboard/.../SimpleVaultIME.kt` — **restyled this session**, see below | SCR.03 |
+| 4 | Add login | `lib/screens/add_edit_screen.dart` | SCR.04 — same divergence as before: two explicit optional match fields (website domain, app package) rather than guessing from one field. |
+| 5 | Settings | `lib/screens/settings_screen.dart` | SCR.05 |
 
-There is currently no **edit/view existing credential** screen —
-`VaultListScreen` lists credentials but tapping a row does nothing yet.
-That's a real gap (below), not an intentional omission.
+`VaultListScreen` now includes a working **view-credential dialog**
+(tap a row → username + masked/revealable password + notes) — this closes
+the "tapping a row does nothing" gap noted in the pre-Flutter version of
+this document. There's still no separate **edit** flow (only add + view).
+
+## Keyboard restyle (this session)
+
+Direct feedback was that the keyboard "looked worst, not like Google
+keyboard." `SimpleVaultIME` was rebuilt with:
+- Rounded key backgrounds with a real pressed-state color (via
+  `GradientDrawable` + `StateListDrawable`, no XML drawables needed)
+- 48dp key height (previously 46dp — this also closes the touch-target gap
+  noted below in the original review)
+- A staggered middle row (`a s d f g h j k l` inset from the edges, matching
+  real keyboards instead of a flush grid)
+- Haptic feedback on every key press
+- A language label on the spacebar ("English (US)"), matching Gboard's convention
+- A pill-shaped, icon-prefixed suggestion chip instead of a flat rectangle
+
+Still a Phase 2a proof-of-concept for the suggestion mechanism, not
+production typing (no autocorrect/gestures/other languages) — see
+`keyboard/FORK_NOTES.md`.
 
 ## Navigation flow
 
@@ -85,39 +105,43 @@ reference them in `VaultKeyTypography` to close this gap.
 | Missing required fields on Add login | `AddEditCredentialScreen` | Inline error text above the Save button |
 | Biometric hardware/enrollment unavailable | `UnlockScreen`, `SettingsScreen` | Checked via `BiometricPromptHelper.isAvailable()` before ever showing a biometric prompt — added this session after finding it was missing (see `PHASES.md`) |
 
-**Gap:** the vault list is a quick local SQLCipher read (now a reactive Room
-`Flow` via `observeAll`, so it self-refreshes on add/remove), so it has no
-spinner — reasonable for now, though a very large vault would benefit from a
-loading state. `UnlockScreen` *does* show a "Please wait…" state, since its
-PBKDF2 derivation now runs off the main thread.
+**Gap:** there's no loading/spinner state anywhere — every repository call
+is a quick local SQLCipher read, so this is a reasonable simplification for
+now, but a very large vault (hundreds of entries) would benefit from a
+loading indicator on `VaultListScreen`'s initial `LaunchedEffect` fetch.
 
 ## Accessibility
 
-- All icon-only controls (`Icons.Filled.Add`, `Settings`, `Close`) currently
-  rely on Compose's default `contentDescription` handling via the icon's
-  semantic label where set, but **should be explicitly audited** — a couple
-  of `IconButton`s don't pass an explicit `contentDescription` string
-  resource, which TalkBack will read poorly. Flagging as a follow-up rather
-  than fixing silently, since the right copy is a product decision.
-- Password fields use `PasswordVisualTransformation()` — correct for privacy,
-  but there's no "show password" toggle anywhere, which is a real usability
-  gap for anyone visually confirming what they typed before saving.
-- Touch targets: the keyboard's `SimpleVaultIME` keys are `46dp` tall — just
-  under Android's 48dp recommended minimum touch target. Worth bumping to
-  48dp when this becomes a real (non-PoC) keyboard, though the letter keys'
-  width still comfortably exceeds the minimum in the other dimension.
+- All icon-only controls (`Icons.settings_outlined`, `Icons.add`,
+  `Icons.visibility`) rely on Flutter's default semantics; Flutter's
+  `IconButton` accepts a `tooltip` parameter that also feeds screen-reader
+  labels, and none of the icon buttons in `lib/screens/` currently set one.
+  **Should be explicitly audited** before shipping — flagging as a follow-up
+  since the right copy is a product decision, not fixing silently.
+- Password fields use `obscureText: true` — correct for privacy. Unlike the
+  pre-Flutter version, `VaultListScreen`'s detail dialog now DOES have a
+  reveal/hide toggle (the `Icons.visibility`/`visibility_off` button) — this
+  closes the "no show-password toggle" gap noted previously, though only for
+  viewing a saved credential, not for the add-login form's password field.
+- Touch targets: the keyboard's `SimpleVaultIME` keys are now `48dp` tall
+  (bumped from `46dp` in this session's restyle — see the note above) — at
+  Android's recommended minimum, no longer just under it.
 
 ## Mobile-optimization review
 
 What's already handled well:
-- `FLAG_SECURE` on `MainActivity` — excludes the app from recents thumbnails
-  and screen recording, directly relevant on a screen showing credentials.
-- `LazyColumn` in `VaultListScreen` — correct choice for a potentially long
-  list, avoids inflating every row up front.
-- The keyboard view is built from lightweight `View`s, not Compose — correct
-  call, since `InputMethodService` input views have historically had
-  friction hosting a full Compose tree, and a keyboard needs to be as
-  lightweight/fast to inflate as possible.
+- `FLAG_SECURE` was set on the old Compose `MainActivity` but was missed in
+  the initial pass of this Flutter migration — caught during this same
+  review and **re-added** to the new `MainActivity.onCreate()`. Worth
+  mentioning here anyway since it's exactly the kind of thing worth
+  double-checking after any activity-class rewrite.
+- `ListView.builder` in `VaultListScreen` — correct choice for a potentially
+  long list, avoids inflating every row up front (same reasoning as the old
+  `LazyColumn`).
+- The keyboard view is still built from lightweight native `View`s, not
+  Flutter or Compose — correct call, unchanged by this migration, since
+  `InputMethodService` input views need to be as lightweight/fast to
+  inflate as possible and have no relationship to the app's UI framework.
 
 What's not yet addressed:
 - No landscape-orientation testing/consideration — the keyboard's key grid
@@ -126,9 +150,10 @@ What's not yet addressed:
 - No tablet/large-screen layout — `VaultListScreen`'s single-column list
   would look sparse on a tablet; not a priority for a phone-first password
   manager, but worth a conscious decision rather than a default.
-- Dark mode: `VaultKeyTheme` does define a dark color scheme
-  (`VaultKeyDarkColors`), but it hasn't been visually reviewed against the
-  mockup's palette — the mockup itself is fixed light/dark by section
+- Dark mode: `theme.dart` only defines a light `ColorScheme` — the old
+  Compose version at least had a `VaultKeyDarkColors` stub; that didn't
+  carry over. Real gap, not a stylistic one, since Flutter defaults to
+  following system dark mode unless a theme is explicit about it, so right
   (never adapts), so the in-app dark theme is really its own design pass
   that hasn't happened yet.
 

@@ -8,20 +8,28 @@ of these diagrams, anywhere, which is the point.
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant UI as AddEditCredentialScreen
+    participant UI as AddEditScreen (Dart)
+    participant CH as MethodChannel (MainActivity.kt)
     participant Repo as CredentialRepository
     participant FC as FieldCipher
     participant DB as VaultDatabase (SQLCipher)
 
     U->>UI: fills label, domain/package, username, password
-    UI->>Repo: addCredential(...)
+    UI->>CH: invokeMethod("addCredential", {...})
+    CH->>Repo: addCredential(...)
     Repo->>FC: encrypt(username), encrypt(password), encrypt(notes)
     FC-->>Repo: EncryptedBlob (iv + ciphertext) per field
     Repo->>DB: insertCredential(entity), insertMatch(...) per match
     DB-->>Repo: rows written
-    Repo-->>UI: (suspend fun returns)
-    UI-->>U: navigate back to Vault list
+    Repo-->>CH: (suspend fun returns)
+    CH-->>UI: result.success(null)
+    UI-->>U: Navigator.pop() back to Vault list
 ```
+
+Every other flow below (native-app suggestion, browser autofill, password
+unlock, biometric unlock) is untouched by the Flutter migration — none of
+them go through Dart at all, since the keyboard and autofill service are
+still fully native and never talk to Flutter or `MainActivity`.
 
 ## 2. Suggestion popup inside a native app
 
@@ -79,23 +87,27 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     participant U as User
-    participant UI as UnlockScreen
+    participant UI as UnlockScreen (Dart)
+    participant CH as MethodChannel (MainActivity.kt)
     participant S as VaultSession
     participant PKD as PasswordKeyDerivation
     participant MD as VaultMetadataStore
 
     U->>UI: types master password
-    UI->>S: unlockWithPassword(password)
+    UI->>CH: invokeMethod("unlockWithPassword", {password})
+    CH->>S: unlockWithPassword(password)
     S->>MD: loadSalt(), loadWrappedPasswordKey()
     S->>PKD: unwrapDbKey(password, salt, wrapped)
     alt correct password
         PKD-->>S: raw 32-byte dbKey
         S->>S: activate(dbKey) — opens VaultDatabase, creates FieldCipher, starts auto-lock timer
-        S-->>UI: true
-        UI-->>U: navigate to Vault list
+        S-->>CH: true
+        CH-->>UI: result.success(true)
+        UI-->>U: Navigator to Vault list
     else wrong password
         PKD-->>S: throws AEADBadTagException
-        S-->>UI: false
+        S-->>CH: false
+        CH-->>UI: result.success(false)
         UI-->>U: "Wrong password"
     end
 ```

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shown while Flutter's engine is still warming up, before the first frame. -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">@drawable/launch_background</item>
+    </style>
+
+    <!-- Used once Flutter has drawn its first frame — kept minimal since
+         Flutter itself owns all real UI theming from here on (see lib/theme.dart). -->
+    <style name="NormalTheme" parent="@android:style/Theme.Black.NoTitleBar">
+        <item name="android:windowBackground">#ECEAE6</item>
+    </style>
+</resources>

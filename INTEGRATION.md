@@ -1,80 +1,103 @@
 # Integration
 
-How the four modules actually connect at runtime, and every point where
-this app integrates with an Android system service. Read `02-architecture.md`
-first for *why* things are split this way — this doc is about the concrete
-wiring.
+How the Flutter UI, the three native modules, and the MethodChannel bridge
+actually connect at runtime, plus every point where this app touches an
+Android system service. Read `02-architecture.md` first for *why* things are
+split this way — this doc is about the concrete wiring.
 
-## Module dependency graph
+## Layer diagram
 
 ```
-        app
-      /  |   \
-keyboard | autofill
-      \  |   /
-     vault-core
+   lib/ (Flutter/Dart)
+        |
+        |  MethodChannel "com.vaultkey.app/vault"
+        v
+android/app (MainActivity.kt — FlutterFragmentActivity)
+        |
+   depends on
+        v
+android/vault-core  <---- android/keyboard, android/autofill (also depend on vault-core, not on app)
 ```
 
-- `vault-core` depends on nothing else in this project (keeps the GPL-3.0
-  boundary in `keyboard` from leaking into the encryption/data layer).
-- `keyboard` and `autofill` both depend only on `vault-core` — they never
-  depend on each other or on `app`.
-- `app` depends on all three, but mainly so its Settings screen can
-  deep-link into system dialogs for enabling the keyboard/autofill service —
-  it doesn't call into their internals directly.
+- `lib/` never touches Android APIs directly — every native capability
+  (crypto, database, biometrics, system settings intents) is reached through
+  the one `VaultChannel` class (`lib/services/vault_channel.dart`), which
+  calls a single `MethodChannel` implemented in `MainActivity.kt`.
+- `android/vault-core` still depends on nothing else in this project — the
+  Flutter migration didn't change this boundary at all.
+- `android/keyboard` and `android/autofill` still depend only on
+  `vault-core`, exactly as before — they have no dependency on `android/app`
+  or any awareness that the UI is now Flutter instead of Compose.
 
-## The shared runtime object: VaultKeyGraph
+## The MethodChannel contract
 
-Three independent Android entry points — `MainActivity` (in `app`),
-`SimpleVaultIME` (in `keyboard`), and `VaultAutofillService` (in
-`autofill`) — all need to see the **same** unlocked vault. Android doesn't
-give you a built-in way to share an object between a foreground Activity, a
-background IME, and a background system-bound Service unless they share a
-process, so the integration point is:
+Channel name: `com.vaultkey.app/vault`. Every method below is implemented in
+`MainActivity.kt`'s `setMethodCallHandler` and called from
+`VaultChannel` in Dart:
 
-1. All three run in the app's **default process** (no `android:process` in
-   any manifest) — this is a hard requirement, not a suggestion.
-2. `VaultKeyGraph` (in `vault-core`) is a plain Kotlin `object` — Android
-   guarantees exactly one instance per process, which is exactly the
-   "one `VaultSession` per running app" property needed.
-3. `VaultKeyApplication.onCreate()` calls `VaultKeyGraph.init()` first, since
-   Android always constructs `Application` before any `Activity`/`Service` in
-   the same process. The IME and autofill service also call `init()`
-   defensively (it's a no-op if already initialized) in case some OEM/launch
-   path ever starts one of them without going through the normal
-   Application lifecycle first.
+| Method | Dart → Kotlin args | Returns |
+|---|---|---|
+| `getVaultState` | — | `"uninitialized"` / `"locked"` / `"unlocked"` |
+| `createVault` | `password` | `bool` |
+| `unlockWithPassword` | `password` | `bool` |
+| `lock` | — | — |
+| `isBiometricAvailable` | — | `bool` |
+| `isBiometricEnabled` | — | `bool` |
+| `enrollBiometric` | — | `bool` (shows a real `BiometricPrompt`) |
+| `unlockWithBiometric` | — | `bool` (shows a real `BiometricPrompt`) |
+| `disableBiometric` | — | — |
+| `getCredentialSummaries` | — | `List<{id, label, username}>` |
+| `getCredentialDetail` | `id` | `{id, label, username, password, notes}?` |
+| `addCredential` | `label, webDomain, packageName, username, password, notes` | — |
+| `openImeSettings` | — | opens system IME picker |
+| `openAutofillSettings` | — | opens system Autofill-service picker |
 
-Practical consequence: **unlocking the vault from the vault app also unlocks
-it for the keyboard and autofill service**, immediately, with no IPC/Binder
-call involved — they're reading the same in-memory `VaultSession`.
+Password is deliberately excluded from `getCredentialSummaries` — the list
+screen never receives plaintext passwords, only `getCredentialDetail` (for
+one specific credential, on demand) does. See `DATA_FLOW.md`.
 
-## System integration points
+## The shared runtime object: VaultKeyGraph (unchanged by the Flutter migration)
+
+Three independent Android entry points still need to see the same unlocked
+vault: `MainActivity` (now Flutter-hosting, in `android/app`),
+`SimpleVaultIME` (in `android/keyboard`), and `VaultAutofillService` (in
+`android/autofill`). This still works exactly as it did before Flutter:
+
+1. All three run in the app's default process (no `android:process` override).
+2. `VaultKeyGraph` (in `vault-core`) is a plain Kotlin `object` — one
+   instance per process.
+3. `VaultKeyApplication.onCreate()` (still exists, just relocated to
+   `android/app/src/main/kotlin/com/vaultkey/app/VaultKeyApplication.kt`)
+   calls `VaultKeyGraph.init()` first. `MainActivity.configureFlutterEngine()`,
+   the IME, and the autofill service all call `init()` defensively too (a
+   no-op if already done).
+
+Practical consequence, unchanged: unlocking via the Flutter UI immediately
+unlocks the vault for the keyboard and autofill service too — same-process
+in-memory state, no IPC.
+
+## System integration points (unchanged)
 
 | Component | Android system surface | Manifest entry |
 |---|---|---|
-| `SimpleVaultIME` | `InputMethodManager` (the system keyboard picker) | `<service>` with `BIND_INPUT_METHOD`, `android.view.InputMethod` intent-filter, `res/xml/method.xml` |
-| `VaultAutofillService` | `AutofillManager` (Settings → Autofill service) | `<service>` with `BIND_AUTOFILL_SERVICE`, `android.service.autofill.AutofillService` intent-filter, `res/xml/autofill_service.xml` |
-| `CryptoManager` / `BiometricUnlock` | `AndroidKeyStore` provider + `BiometricPrompt` | No manifest entry — `USE_BIOMETRIC` permission only |
-| `VaultDatabase` | SQLCipher's native library, bundled via the `net.zetetic:sqlcipher-android` dependency | N/A |
+| `SimpleVaultIME` | `InputMethodManager` | `android/keyboard/src/main/AndroidManifest.xml` |
+| `VaultAutofillService` | `AutofillManager` | `android/autofill/src/main/AndroidManifest.xml` |
+| `CryptoManager` / `BiometricUnlock` | `AndroidKeyStore` + `BiometricPrompt` | `USE_BIOMETRIC` permission only |
+| `VaultDatabase` | SQLCipher native library | N/A |
 
-## Integrating the real HeliBoard fork (Phase 2b)
+## What changed vs. what didn't
 
-Covered in detail in `keyboard/FORK_NOTES.md` — the short version for this
-doc's purposes: only `keyboard`'s internals change. `CredentialSuggestionInjector`,
-its `CredentialChip` data class, and its dependency on `vault-core` all stay
-exactly as they are; the fork just becomes the thing calling
-`onFieldFocused()`/`clearSuggestions()` instead of `SimpleVaultIME`. No other
-module needs to know this happened.
+**Changed:** the UI layer (Compose → Flutter/Dart) and the Gradle project
+layout (native modules relocated under `android/` to match Flutter's
+expected structure, `app` module rebuilt as a thin Flutter host).
 
-## What is deliberately NOT integrated (and why that's a feature, not a gap)
+**Did not change:** `VaultSession`, `CryptoManager`, `PasswordKeyDerivation`,
+`BiometricUnlock`, `FieldCipher`, `VaultMetadataStore`, `CredentialRepository`
+(plus the new `getById()`), `CredentialSuggestionInjector`,
+`VaultAutofillService`, and `VaultKeyGraph` — all byte-for-byte the same
+logic as documented in `DATA_FLOW.md` and `02-architecture.md`.
 
-- **No analytics/crash-reporting SDK.** Any third-party SDK is a networking
-  dependency by default, which would break the "no INTERNET permission
-  anywhere" claim that's central to this app's trust story (see
-  `02-architecture.md`'s threat model). If you add one later, it must be
-  audited for offline-safety first, and probably shouldn't live in
-  `vault-core`, `keyboard`, or `autofill` at all — `app` is the only module
-  where it could arguably belong, and even then it changes what "fully
-  offline" means for the whole product.
-- **No cloud sync/backup.** Same reasoning — `android:allowBackup="false"`
-  in the app manifest is intentional, not a TODO.
+## Integrating the real HeliBoard fork (Phase 2b) — still applies as-is
+Nothing about the Flutter migration changes `keyboard/FORK_NOTES.md` — the
+fork replaces `SimpleVaultIME`'s internals only, and neither Flutter nor
+`MainActivity` need to know that happened.

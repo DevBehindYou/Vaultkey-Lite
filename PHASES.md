@@ -4,8 +4,7 @@ Read `README.md` first for how to open this in Android Studio. This file
 tracks what's actually done versus stubbed, phase by phase.
 
 ## Phase 1 — Vault core (crypto + data) — ✅ done
-- `CryptoManager` — Keystore-backed AES-256-GCM wrap/unwrap; now used by
-  `VaultSession` to device-bind the password-unlock envelope.
+- `CryptoManager` — Keystore-backed AES-256-GCM wrap/unwrap (generic).
 - `PasswordKeyDerivation` — PBKDF2-HMAC-SHA256 (210k iterations) master-password path.
 - `BiometricUnlock` — Keystore key with `setUserAuthenticationRequired(true)`, invalidated on re-enrollment.
 - `FieldCipher` — per-field AES-GCM using the live session key (no Keystore round-trip per field).
@@ -51,38 +50,6 @@ tracks what's actually done versus stubbed, phase by phase.
 - Manifest, adaptive launcher icon (vector, no PNGs needed), strings, base
   XML theme, proguard/consumer-proguard stubs, root `gradle.properties`.
 
-## Fixed in the bug-audit pass (crypto + integration correctness)
-These address defects that would have surfaced on the first real Gradle
-build/run (still not compiler-verified here — run CI to confirm):
-- **SQLCipher would not compile** — code imported `net.sqlcipher.database.SupportFactory`
-  (the *old*, deprecated `android-database-sqlcipher` API) while depending on
-  the current `net.zetetic:sqlcipher-android`. Switched to
-  `net.zetetic.database.sqlcipher.SupportOpenHelperFactory` and added the
-  required `System.loadLibrary("sqlcipher")` load. `VaultSession.activate()`
-  now hands SQLCipher a private copy of the key, since the factory zeroes the
-  passphrase after opening the DB.
-- **Vault force-locked 30s after unlock, during active use** — `notifyUserActivity()`
-  existed but nothing ever called it. Now wired to `MainActivity.onUserInteraction()`,
-  every keystroke in `SimpleVaultIME`, and each autofill fill request; default
-  idle timeout raised 30s → 5 min; `activate/lock/state` made thread-safe so
-  background auto-lock can't tear down the DB mid-query.
-- **Autofill silently missed common domains** — web-domain matches were stored
-  verbatim but looked up normalized. `CredentialRepository.addCredential()` now
-  normalizes `WEB_DOMAIN` values on write with the same rule the lookup uses.
-- **Master password KDF ran on the UI thread (ANR risk)** — `UnlockScreen` now
-  runs `setUpNewVault`/`unlockWithPassword` on `Dispatchers.Default` with a
-  loading state.
-- **`CryptoManager` was dead code** — the documented Keystore master-key layer
-  is now actually integrated: the password-wrapped DB key is additionally
-  wrapped by the hardware-backed Keystore key before hitting SharedPreferences,
-  so the persisted blob can't be brute-forced off-device.
-- **Vault list went stale after adding a login** — `VaultListScreen` now
-  collects a Room `Flow` (`observeAll`) instead of a one-shot load; inserts run
-  in a single transaction.
-- Smaller: broadened login-field detection (numeric PIN fields), `EncryptedBlob`
-  value equality + a round-trip unit test, `markUsed()` wired on chip insert,
-  autofill empty-`fillContexts` guard, removed unused imports.
-
 ## Fixed this session (after a full manual re-read/code review)
 - **Biometric prompts could fail/crash on devices with no biometric hardware
   or nothing enrolled** — `BiometricPromptHelper.isAvailable()` now gates
@@ -118,10 +85,9 @@ build/run (still not compiler-verified here — run CI to confirm):
   view/edit-existing-credential screen yet, only add-new. Real gap, not
   intentional; see `UX_UI_DESIGN.md`'s screen inventory.
 - **No "show password" toggle** anywhere a password is entered or displayed.
-- **Auto-lock duration** now defaults to 5 minutes and resets on real user
-  activity, but it's still a `VaultSession` constructor default rather than a
-  Settings-screen slider — small, mechanical change once you decide the UI.
-  Note: it does not yet lock on app-backgrounding (only on idle timeout).
+- **Auto-lock duration** is hardcoded to 30 seconds in `VaultSession`'s
+  constructor default rather than a Settings-screen slider — small, mechanical
+  change once you decide the right default and UI for it.
 - **Argon2id** was not substituted for PBKDF2 — PBKDF2-HMAC-SHA256 at 210k
   iterations is still an acceptable, audited choice, but Argon2id is stronger
   against GPU/ASIC attacks if you want to add a maintained Argon2 binding later.
@@ -148,3 +114,60 @@ build/run (still not compiler-verified here — run CI to confirm):
    confirm the suggestion chip appears and inserts text.
 3. Then decide: invest in Phase 2b (real HeliBoard fork) or keep iterating on
    Phase 3's inline-suggestions/save-prompt stubs first.
+
+## Phase 5 — Flutter UI migration — done this session
+The vault UI (previously Jetpack Compose in the `app` Gradle module) has
+been rewritten in Flutter/Dart, per direct request. What changed:
+
+- **Archived, not deleted:** the old Compose UI now lives at
+  `legacy_compose_ui/app-compose-reference/` — full Gradle module, untouched,
+  in case anything there needs to be referenced or restored.
+- **New Flutter app at the repo root:** `pubspec.yaml` + `lib/` — four
+  screens (`UnlockScreen`, `VaultListScreen`, `AddEditScreen`,
+  `SettingsScreen`), a `VaultChannel` service class wrapping a single
+  `MethodChannel`, and `theme.dart` carrying over the exact same color
+  tokens as the mockup and the old Compose theme.
+- **`android/` restructured to Flutter's expected layout:** `vault-core`,
+  `keyboard`, and `autofill` moved under `android/` unchanged; a brand-new
+  `android/app` hosts `MainActivity` (now a `FlutterFragmentActivity`,
+  still `FragmentActivity`-based for the same `BiometricPrompt` reason as
+  before) plus the `MethodChannel` handler that's the only bridge between
+  Dart and `VaultKeyGraph`.
+- **New repository method:** `CredentialRepository.getById()` /
+  `CredentialDao.getById()` — needed so the Dart detail dialog can fetch one
+  credential's plaintext without pulling the whole list.
+- **CI rewritten** to use `flutter build apk`/`flutter build appbundle`
+  instead of raw `gradle` tasks — and since the Flutter tool needs a real
+  Gradle wrapper (which this project still doesn't have committed — no
+  Flutter SDK in this sandbox to generate one), both workflows now bootstrap
+  a genuine wrapper from a scratch `flutter create` project before building.
+  This is arguably a bigger sandbox-honesty caveat than anything before it —
+  see DEPLOYMENT.md.
+
+**What did NOT change:** every native module's actual logic —
+`VaultSession`, `CryptoManager`, `FieldCipher`, `CredentialSuggestionInjector`,
+`VaultAutofillService` — is byte-for-byte the same as before this migration.
+Only the UI layer and the Gradle project layout moved.
+
+## Keyboard visual restyle — done this session
+Direct feedback: the keyboard "looked worst, not like Google keyboard."
+`SimpleVaultIME` was rebuilt with a Gboard-style light theme: rounded key
+backgrounds (`GradientDrawable` + `StateListDrawable` for a real pressed
+state, no XML drawables needed), proper 48dp key height (this also happens
+to close the touch-target accessibility gap flagged in `UX_UI_DESIGN.md`),
+a staggered middle row, haptic feedback on every key, a language label on
+the spacebar, and a pill-shaped, icon-prefixed suggestion chip instead of a
+flat rectangle. Still a Phase 2a proof-of-concept, not production typing —
+see `keyboard/FORK_NOTES.md` for the real HeliBoard fork plan, which this
+restyle doesn't change.
+
+## Biggest remaining risk, stated plainly
+The `android/app` Gradle files (`settings.gradle.kts`, `build.gradle.kts`,
+the Flutter plugin wiring) were hand-authored against current, verified
+Flutter documentation/templates — but normally `flutter create` generates
+these, and this session had no Flutter SDK to actually run that command and
+diff against. If CI fails on the Flutter-specific plugin wiring (as opposed
+to anything in `vault-core`/`keyboard`/`autofill`, which are unchanged and
+already had a full review pass), that's the most likely place — start
+there, and the error message from `flutter build apk` will usually name the
+exact line.

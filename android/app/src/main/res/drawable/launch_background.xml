@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@android:color/white" />
+    <!-- Swapped to the brand "paper" background color instead of Flutter's
+         template default white, to match 03-ui-ux-mockup.html's palette
+         from the very first frame the user sees. -->
+    <item>
+        <color android:color="#ECEAE6" />
+    </item>
+</layer-list>

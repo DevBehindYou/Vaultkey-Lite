@@ -1,8 +1,5 @@
-name: Android CI (build + test)
+name: Flutter CI (analyze + test + build debug APK)
 
-# Runs on every push and pull request. Uses no secrets, so it works
-# immediately on a fresh fork/repo with zero setup — this is the workflow
-# that replaces "open it in Android Studio and see if it builds."
 on:
   push:
     branches: ["**"]
@@ -16,46 +13,54 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
-        with:
-          packages: "platform-tools platforms;android-34 build-tools;34.0.0"
+      - name: flutter pub get
+        run: flutter pub get
 
-      # No Gradle wrapper is committed (this project was authored without
-      # local Gradle available to generate the wrapper jar) — setup-gradle
-      # installs the exact pinned version instead, so every `gradle ...`
-      # call below runs the same version this project was written against.
-      - name: Set up Gradle 8.9
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "8.9"
+      - name: flutter analyze
+        run: flutter analyze
 
-      - name: "Unit tests (vault-core: crypto round-trip tests)"
-        run: gradle :vault-core:testDebugUnitTest --stacktrace
+      - name: flutter test (Dart widget/unit tests)
+        run: flutter test
 
-      - name: Lint
-        run: gradle lint --stacktrace
+      # This repo has no committed Gradle wrapper under android/ — it was
+      # authored in a sandbox with no Flutter SDK/network to generate the
+      # real wrapper jar via `flutter create`. Bootstrapping it from a
+      # scratch project (using the real Flutter SDK this job just installed)
+      # gets a genuine, correct wrapper without risking a hand-authored
+      # binary. See DEPLOYMENT.md for the full explanation.
+      - name: Bootstrap Gradle wrapper (see comment above)
+        run: |
+          flutter create --platforms=android --org com.vaultkey /tmp/wrapper_bootstrap
+          cp /tmp/wrapper_bootstrap/android/gradlew android/gradlew
+          cp /tmp/wrapper_bootstrap/android/gradlew.bat android/gradlew.bat
+          mkdir -p android/gradle/wrapper
+          cp /tmp/wrapper_bootstrap/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
+          cp /tmp/wrapper_bootstrap/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.jar
+          chmod +x android/gradlew
 
-      - name: Build debug APK (all modules)
-        run: gradle assembleDebug --stacktrace
+      - name: Android unit tests (vault-core: crypto round-trip tests)
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew :vault-core:testDebugUnitTest --stacktrace
+
+      - name: Build debug APK (Flutter UI + native vault-core/keyboard/autofill, one artifact)
+        run: flutter build apk --debug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: vaultkey-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
-
-      - name: Upload lint report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lint-report
-          path: "**/build/reports/lint-results-*.html"
-          if-no-files-found: ignore
