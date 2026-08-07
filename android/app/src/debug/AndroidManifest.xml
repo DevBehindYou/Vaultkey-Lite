@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!--
-      This is Flutter's own standard debug-manifest override, not something
-      added for this project specifically: `flutter run`/`flutter build
-      --debug` needs the Dart VM service reachable over localhost for hot
-      reload, which requires this permission ONLY in debug builds. It is
-      merged in for debug/profile variants only — `flutter build apk
-      --release` and `flutter build appbundle --release` use
+      Flutter's own standard debug-manifest override, not something added for
+      this project specifically: the debug and profile builds (flutter run, and
+      a debug-mode "flutter build apk") need the Dart VM service reachable over
+      localhost for hot reload, which requires this permission ONLY in those
+      builds. It is merged in for debug/profile variants only. The release
+      builds (release-mode "flutter build apk" / "flutter build appbundle") use
       src/main/AndroidManifest.xml alone, which has no INTERNET permission.
-      Verify this yourself any time: `aapt dump permissions` on the release
-      APK/AAB should show nothing but USE_BIOMETRIC.
+      Verify any time with "aapt dump permissions" on the release APK/AAB: it
+      should list nothing but USE_BIOMETRIC.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
 </manifest>
