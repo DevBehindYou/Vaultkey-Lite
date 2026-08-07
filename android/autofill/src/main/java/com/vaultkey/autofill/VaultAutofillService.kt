@@ -13,7 +13,6 @@ import android.service.autofill.SaveRequest
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
-import androidx.annotation.RequiresApi
 import com.vaultkey.core.VaultKeyGraph
 import com.vaultkey.core.crypto.VaultState
 import com.vaultkey.core.data.DecryptedCredential
