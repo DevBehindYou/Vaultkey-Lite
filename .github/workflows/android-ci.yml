@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: ["**"]
 
+# Cancel superseded runs on the same branch/PR so a rapid push sequence doesn't
+# queue a pile of redundant builds.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -16,7 +22,11 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
+          # Pin the SDK for reproducible builds. Bump deliberately; must be a
+          # real published Flutter release shipping Dart >= 3.4 (see pubspec).
+          flutter-version: 3.24.5
           channel: stable
+          cache: true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -26,6 +36,13 @@ jobs:
 
       - name: flutter pub get
         run: flutter pub get
+
+      # Advisory for now (continue-on-error) so a formatting nit never blocks a
+      # build. Once the tree has been through `dart format .` once, flip this to
+      # a hard gate by removing continue-on-error.
+      - name: Check formatting (dart format)
+        continue-on-error: true
+        run: dart format --output=none --set-exit-if-changed .
 
       - name: flutter analyze
         run: flutter analyze

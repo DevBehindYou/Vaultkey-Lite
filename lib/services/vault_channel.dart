@@ -82,6 +82,28 @@ class VaultChannel {
         'notes': notes,
       });
 
+  Future<void> updateCredential({
+    required String id,
+    required String label,
+    required String webDomain,
+    required String packageName,
+    required String username,
+    required String password,
+    String? notes,
+  }) =>
+      _channel.invokeMethod('updateCredential', {
+        'id': id,
+        'label': label,
+        'webDomain': webDomain,
+        'packageName': packageName,
+        'username': username,
+        'password': password,
+        'notes': notes,
+      });
+
+  Future<void> deleteCredential(String id) =>
+      _channel.invokeMethod('deleteCredential', {'id': id});
+
   Future<void> openImeSettings() => _channel.invokeMethod('openImeSettings');
 
   Future<void> openAutofillSettings() => _channel.invokeMethod('openAutofillSettings');

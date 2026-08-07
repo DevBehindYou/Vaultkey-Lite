@@ -20,6 +20,12 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
+// Export the Room schema JSON to a version-controlled folder so every schema
+// change is reviewable in git and so Room can auto-verify migrations in tests.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.core.ktx)
     implementation(libs.room.runtime)

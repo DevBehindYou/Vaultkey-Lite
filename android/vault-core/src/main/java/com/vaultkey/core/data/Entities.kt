@@ -9,9 +9,10 @@ enum class MatchType { PACKAGE_NAME, WEB_DOMAIN }
 
 /**
  * One saved login. `usernameCipher` / `passwordCipher` / `notesCipher` are the
- * iv+ciphertext produced by CryptoManager.wrap() — never plaintext, even in this DB,
- * even though the whole SQLite file is itself SQLCipher-encrypted at rest
- * (defense in depth: DB-file compromise still doesn't yield plaintext secrets directly).
+ * iv+ciphertext produced by FieldCipher.encrypt() (session-key AES-GCM) — never
+ * plaintext, even in this DB, even though the whole SQLite file is itself
+ * SQLCipher-encrypted at rest (defense in depth: DB-file compromise still
+ * doesn't yield plaintext secrets directly).
  */
 @Entity(tableName = "credentials")
 data class CredentialEntity(

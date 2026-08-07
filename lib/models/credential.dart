@@ -26,12 +26,19 @@ class CredentialDetail {
   final String password;
   final String? notes;
 
+  /// Match fields, carried so the edit screen can prefill them. Null on the
+  /// autofill/keyboard paths that never request them.
+  final String? webDomain;
+  final String? packageName;
+
   CredentialDetail({
     required this.id,
     required this.label,
     required this.username,
     required this.password,
     required this.notes,
+    this.webDomain,
+    this.packageName,
   });
 
   factory CredentialDetail.fromMap(Map<Object?, Object?> map) => CredentialDetail(
@@ -40,5 +47,7 @@ class CredentialDetail {
         username: map['username'] as String,
         password: map['password'] as String,
         notes: map['notes'] as String?,
+        webDomain: map['webDomain'] as String?,
+        packageName: map['packageName'] as String?,
       );
 }

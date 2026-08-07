@@ -29,7 +29,9 @@ plugins {
     // compatibility tables rather than guessed.
     id("com.android.application") version "8.7.2" apply false
     id("org.jetbrains.kotlin.android") version "2.0.21" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+    // The Compose compiler plugin was dropped with the Flutter migration — no
+    // module in this build applies Compose anymore (the archived
+    // legacy_compose_ui module is not included below).
     id("com.google.devtools.ksp") version "2.0.21-1.0.28" apply false
 }
 

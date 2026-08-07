@@ -7,22 +7,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * This file is NOT a full IME — it's the glue layer meant to plug into the
- * forked HeliBoard codebase (package `helium314.keyboard.latin`, class
- * `LatinIME extends InputMethodService`) for the production build. For a
- * buildable-today path, `SimpleVaultIME.kt` in this same module also uses it
- * directly, without HeliBoard, as a walking-skeleton proof of concept.
+ * This file is NOT a full IME — it's the glue layer that talks to the
+ * encrypted vault on behalf of whichever InputMethodService is actually
+ * registered. As of Phase 6, that's `FlutterVaultIME` in the `android/app`
+ * module (a thin Kotlin shell hosting a Flutter-rendered keyboard UI — see
+ * INTEGRATION.md and PHASES.md). `SimpleVaultIME.kt`, still in this same
+ * module, is kept only as an unregistered reference implementation of a
+ * pure-native keyboard (no Flutter engine involved) in case that approach
+ * is ever reverted to.
  *
- * Integration points inside a HeliBoard fork (verify file/class names against
- * the exact fork commit before wiring up):
+ * If a real HeliBoard fork replaces either of those someday (see
+ * keyboard/FORK_NOTES.md), this class's job stays the same — it's the one
+ * piece that doesn't change no matter which keyboard shell calls it:
  *
- *   1. LatinIME.onStartInputView(editorInfo, restarting) →
- *      call onFieldFocused(editorInfo) here.
- *   2. The existing suggestion strip view already knows how to render a row
- *      of chips for dictionary word suggestions — this injector produces the
- *      same chip shape so it slots into that rendering code rather than
- *      building a second UI surface.
- *   3. LatinIME.onFinishInputView() → call clearSuggestions().
+ *   1. Call onFieldFocused(editorInfo) when a text field gains focus.
+ *   2. Render the CredentialChip list this produces however that shell
+ *      renders suggestions (a dictionary-style strip, a Flutter widget, etc).
+ *   3. Call clearSuggestions() when the field loses focus / input view closes.
  */
 class CredentialSuggestionInjector(
     private val repository: CredentialRepository,

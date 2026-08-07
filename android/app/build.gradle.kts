@@ -64,13 +64,12 @@ flutter {
 }
 
 dependencies {
-    // The platform channel handler in MainActivity.kt talks to VaultKeyGraph,
-    // which lives in vault-core. keyboard/autofill don't need a compile-time
-    // dependency here — they're separate system-bound components installed
-    // alongside this app, not called into directly from Dart/Kotlin here —
-    // but including them means `flutter build apk` produces one APK
-    // containing all four components together, which is what you want
-    // installed on a device (app + keyboard + autofill service in one place).
+    // vault-core: VaultKeyGraph, used directly by MainActivity's MethodChannel handler.
+    // keyboard: FlutterVaultIME (in this module) imports CredentialSuggestionInjector
+    //   and CredentialChip from it directly — see PHASES.md's Phase 6 notes on why
+    //   the IME service class itself lives here rather than in :keyboard.
+    // autofill: no compile-time dependency needed, but included so `flutter build apk`
+    //   produces one APK containing the autofill service too.
     implementation(project(":vault-core"))
     implementation(project(":keyboard"))
     implementation(project(":autofill"))

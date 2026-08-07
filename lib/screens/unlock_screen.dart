@@ -20,6 +20,7 @@ class _UnlockScreenState extends State<UnlockScreen> {
   bool _biometricAvailable = false;
   String? _error;
   bool _busy = false;
+  bool _obscure = true;
 
   @override
   void initState() {
@@ -28,14 +29,31 @@ class _UnlockScreenState extends State<UnlockScreen> {
   }
 
   Future<void> _load() async {
-    final state = await _channel.getVaultState();
-    final biometricAvailable = await _channel.isBiometricAvailable();
-    if (!mounted) return;
-    setState(() {
-      _isFirstRun = state == VaultState.uninitialized;
-      _biometricAvailable = biometricAvailable && state == VaultState.locked;
-      _checkingState = false;
-    });
+    try {
+      final state = await _channel.getVaultState();
+      final biometricAvailable = await _channel.isBiometricAvailable();
+      if (!mounted) return;
+      setState(() {
+        _isFirstRun = state == VaultState.uninitialized;
+        _biometricAvailable = biometricAvailable && state == VaultState.locked;
+        _checkingState = false;
+      });
+    } catch (e) {
+      // Without this, a channel failure leaves _checkingState true forever —
+      // an unbreakable spinner. Fall through to the password field instead.
+      if (!mounted) return;
+      setState(() {
+        _checkingState = false;
+        _error = 'Could not reach the vault service';
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
   }
 
   Future<void> _goToVault() async {
@@ -66,19 +84,41 @@ class _UnlockScreenState extends State<UnlockScreen> {
         });
         return;
       }
-      await _channel.createVault(_passwordController.text);
-      if (await _channel.isBiometricAvailable()) {
-        // Offer enrollment right away — declining just proceeds to the vault.
-        await _channel.enrollBiometric();
-      }
-      await _goToVault();
-    } else {
-      final ok = await _channel.unlockWithPassword(_passwordController.text);
-      if (ok) {
+    }
+
+    try {
+      if (_isFirstRun) {
+        final created = await _channel.createVault(_passwordController.text);
+        if (!created) {
+          if (mounted) {
+            setState(() {
+              _error = "Couldn't create the vault — try again";
+              _busy = false;
+            });
+          }
+          return;
+        }
+        // Re-check here (not _biometricAvailable, which is intentionally false
+        // pre-init) — offer enrollment right away; declining just proceeds.
+        if (await _channel.isBiometricAvailable()) {
+          await _channel.enrollBiometric();
+        }
         await _goToVault();
       } else {
+        final ok = await _channel.unlockWithPassword(_passwordController.text);
+        if (ok) {
+          await _goToVault();
+        } else if (mounted) {
+          setState(() {
+            _error = 'Wrong password';
+            _busy = false;
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _error = 'Wrong password';
+          _error = 'Something went wrong — try again';
           _busy = false;
         });
       }
@@ -124,14 +164,26 @@ class _UnlockScreenState extends State<UnlockScreen> {
                 const SizedBox(height: 24),
                 TextField(
                   controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Master password'),
+                  obscureText: _obscure,
+                  autofocus: true,
+                  textInputAction: _isFirstRun ? TextInputAction.next : TextInputAction.go,
+                  onSubmitted: _isFirstRun ? null : (_) => _busy ? null : _submit(),
+                  decoration: InputDecoration(
+                    labelText: 'Master password',
+                    suffixIcon: IconButton(
+                      tooltip: _obscure ? 'Show password' : 'Hide password',
+                      icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
                 ),
                 if (_isFirstRun) ...[
                   const SizedBox(height: 12),
                   TextField(
                     controller: _confirmController,
-                    obscureText: true,
+                    obscureText: _obscure,
+                    textInputAction: TextInputAction.go,
+                    onSubmitted: (_) => _busy ? null : _submit(),
                     decoration: const InputDecoration(labelText: 'Confirm password'),
                   ),
                 ],

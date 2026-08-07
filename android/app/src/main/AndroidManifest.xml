@@ -36,8 +36,28 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- The keyboard <service> and autofill <service> entries come in
-             automatically via manifest merging from the :keyboard and
-             :autofill module dependencies declared in build.gradle.kts. -->
+        <!--
+          The IME's Kotlin shell (FlutterVaultIME) lives in THIS module
+          rather than android/keyboard, specifically so it can resolve the
+          Flutter engine dependency the same way MainActivity does — see
+          INTEGRATION.md for why splitting that across modules would be
+          fragile. android/keyboard now only supplies the pure-logic
+          CredentialSuggestionInjector this service calls into.
+        -->
+        <service
+            android:name=".FlutterVaultIME"
+            android:label="VaultKey Keyboard"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
+
+        <!-- The autofill <service> entry still comes in automatically via
+             manifest merging from the :autofill module dependency. -->
     </application>
 </manifest>

@@ -36,10 +36,12 @@ still fully native and never talk to Flutter or `MainActivity`.
 ```mermaid
 sequenceDiagram
     participant App as Some other app (e.g. GitHub app)
-    participant IME as SimpleVaultIME
+    participant IME as FlutterVaultIME (Kotlin shell)
     participant Inj as CredentialSuggestionInjector
     participant Repo as CredentialRepository
     participant DB as VaultDatabase
+    participant CH as MethodChannel (com.vaultkey.app/keyboard)
+    participant UI as keyboard_app.dart (Flutter)
 
     App->>IME: field gains focus (onStartInputView, EditorInfo)
     IME->>Inj: onFieldFocused(editorInfo)
@@ -50,14 +52,22 @@ sequenceDiagram
     Repo->>Repo: decrypt each field via FieldCipher
     Repo-->>Inj: List<DecryptedCredential>
     Inj-->>IME: onSuggestionsReady(chips)
-    IME->>IME: renderSuggestions() — chip appears above keys
-    App-->>App: user taps chip
+    IME->>CH: invokeMethod("onSuggestions", chips) — Kotlin-initiated, not Dart-initiated
+    CH-->>UI: onSuggestionsChanged(chips)
+    UI->>UI: setState — suggestion pill appears above the keys
+    App-->>App: user taps the pill
+    UI->>CH: invokeMethod("insertCredential", {chipId})
+    CH->>IME: (method call handler)
     IME->>Inj: credentialFor(chipId)
     IME->>App: currentInputConnection.commitText(username)
 ```
 
 Note: this path only ever sees the **package name** — see Data Flow #3 for
-why website matching inside a browser needs the Autofill path instead.
+why website matching inside a browser needs the Autofill path instead. Also
+note this is the one flow in the whole app where the native side calls
+*into* Dart unprompted (`invokeMethod` from Kotlin) rather than only ever
+answering a Dart-initiated call — see `INTEGRATION.md`'s note on this
+asymmetry.
 
 ## 3. Suggestion inside a browser (website matching)
 

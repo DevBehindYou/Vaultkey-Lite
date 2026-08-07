@@ -1,7 +1,11 @@
 name: vaultkey
 description: An offline, encrypted password locker with a private keyboard.
 publish_to: "none"
-version: 0.1.0
+# <semver>+<buildNumber>. Flutter maps the part after '+' to Android
+# versionCode (must increase on every Play Store upload) and the part before
+# to versionName. Without the '+1', versionCode defaults to 0 and Play
+# rejects the upload.
+version: 0.1.0+1
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

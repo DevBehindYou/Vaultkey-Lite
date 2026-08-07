@@ -4,7 +4,9 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
-pubspec.lock
+# NOTE: pubspec.lock is intentionally NOT ignored — this is an application, and
+# committing the lockfile pins transitive dependency versions for reproducible
+# builds. Commit it after the first `flutter pub get`.
 
 # Android
 android/local.properties

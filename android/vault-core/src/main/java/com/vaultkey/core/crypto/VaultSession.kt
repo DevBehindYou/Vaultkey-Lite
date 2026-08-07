@@ -29,9 +29,12 @@ class VaultSession(
     private val biometricUnlock: BiometricUnlock,
     private val autoLockAfterMillis: Long = 30_000L
 ) {
-    private var rawDbKey: ByteArray? = null
-    private var database: VaultDatabase? = null
-    private var fieldCipher: FieldCipher? = null
+    // @Volatile: the auto-lock timer flips these to null on Dispatchers.Default
+    // while the vault UI / keyboard / autofill read them on other threads —
+    // without it, a stale non-null read could hand out a half-torn-down session.
+    @Volatile private var rawDbKey: ByteArray? = null
+    @Volatile private var database: VaultDatabase? = null
+    @Volatile private var fieldCipher: FieldCipher? = null
     private var autoLockJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Default)
 

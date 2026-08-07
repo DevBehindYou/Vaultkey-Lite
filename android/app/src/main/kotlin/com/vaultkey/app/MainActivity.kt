@@ -49,6 +49,12 @@ class MainActivity : FlutterFragmentActivity() {
         VaultKeyGraph.init(applicationContext) // no-op if already initialized elsewhere in this process
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channelName).setMethodCallHandler { call, result ->
+            // Any interaction with the vault UI counts as activity — push the
+            // idle auto-lock timer back so the vault never locks mid-use (e.g.
+            // while the user is part-way through adding a credential). No-op
+            // when the vault isn't unlocked, so it's safe to call for every
+            // call, including the pre-unlock ones.
+            VaultKeyGraph.session.notifyUserActivity()
             when (call.method) {
                 "getVaultState" -> result.success(vaultStateName())
 
@@ -106,25 +112,27 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(null)
                 }
 
-                "getCredentialSummaries" -> activityScope.launch {
-                    val credentials = VaultKeyGraph.credentialRepository.getAll()
-                    result.success(credentials.map { mapOf("id" to it.id, "label" to it.label, "username" to it.username) })
+                "getCredentialSummaries" -> runOnVault(result) {
+                    val summaries = VaultKeyGraph.credentialRepository.getAllSummaries()
+                    result.success(summaries.map { mapOf("id" to it.id, "label" to it.label, "username" to it.username) })
                 }
 
-                "getCredentialDetail" -> activityScope.launch {
+                "getCredentialDetail" -> runOnVault(result) {
                     val id = call.argument<String>("id")
-                    val credential = id?.let { VaultKeyGraph.credentialRepository.getById(it) }
+                    val credential = id?.let { VaultKeyGraph.credentialRepository.getDetailById(it) }
+                    if (credential != null) VaultKeyGraph.credentialRepository.markUsed(credential.id)
                     result.success(
                         credential?.let {
                             mapOf(
                                 "id" to it.id, "label" to it.label, "username" to it.username,
-                                "password" to it.password, "notes" to it.notes
+                                "password" to it.password, "notes" to it.notes,
+                                "webDomain" to it.webDomain, "packageName" to it.packageName
                             )
                         }
                     )
                 }
 
-                "addCredential" -> activityScope.launch {
+                "addCredential" -> runOnVault(result) {
                     val webDomain = call.argument<String>("webDomain").orEmpty()
                     val packageName = call.argument<String>("packageName").orEmpty()
                     val matches = buildList {
@@ -141,6 +149,29 @@ class MainActivity : FlutterFragmentActivity() {
                     result.success(null)
                 }
 
+                "updateCredential" -> runOnVault(result) {
+                    val webDomain = call.argument<String>("webDomain").orEmpty()
+                    val packageName = call.argument<String>("packageName").orEmpty()
+                    val matches = buildList {
+                        if (webDomain.isNotBlank()) add(MatchType.WEB_DOMAIN to webDomain)
+                        if (packageName.isNotBlank()) add(MatchType.PACKAGE_NAME to packageName)
+                    }
+                    VaultKeyGraph.credentialRepository.updateCredential(
+                        id = call.argument<String>("id").orEmpty(),
+                        label = call.argument<String>("label").orEmpty(),
+                        username = call.argument<String>("username").orEmpty(),
+                        password = call.argument<String>("password").orEmpty(),
+                        notes = call.argument<String>("notes")?.ifBlank { null },
+                        matches = matches
+                    )
+                    result.success(null)
+                }
+
+                "deleteCredential" -> runOnVault(result) {
+                    VaultKeyGraph.credentialRepository.deleteCredential(call.argument<String>("id").orEmpty())
+                    result.success(null)
+                }
+
                 "openImeSettings" -> {
                     startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS))
                     result.success(null)
@@ -154,6 +185,23 @@ class MainActivity : FlutterFragmentActivity() {
                 }
 
                 else -> result.notImplemented()
+            }
+        }
+    }
+
+    /**
+     * Runs a suspend vault operation and, crucially, converts any thrown
+     * exception into a MethodChannel error reply. Without this a repository
+     * failure (e.g. the vault locked mid-call) would abandon the coroutine and
+     * leave the Dart `await` hanging forever. The block is responsible for its
+     * own `result.success(...)` on the happy path.
+     */
+    private fun runOnVault(result: MethodChannel.Result, block: suspend () -> Unit) {
+        activityScope.launch {
+            try {
+                block()
+            } catch (e: Exception) {
+                result.error("vault_error", e.message, null)
             }
         }
     }

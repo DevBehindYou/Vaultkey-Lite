@@ -1,33 +1,43 @@
-# Upgrading from SimpleVaultIME to a real HeliBoard fork (Phase 2b)
+# Production-quality typing — status after the Flutter migration (Phase 6)
 
-`SimpleVaultIME` is a real, working keyboard — good enough to prove the
-suggestion-chip mechanism end-to-end — but it has no autocorrect, no gesture
-typing, no non-English layouts, and a bare-bones look. Once Phase 2a is
-verified on a device, replace it with the actual fork:
+This file originally planned "fork HeliBoard, swap it in for the native
+keyboard shell." That plan assumed the keyboard's typing surface was
+native Kotlin. As of Phase 6, the active keyboard (`FlutterVaultIME` +
+`lib/keyboard/keyboard_app.dart`) renders everything — including the keys
+themselves — in Flutter/Dart. HeliBoard is a native Android/Kotlin codebase
+with no Dart/Flutter port, so "fork it and drop it in" no longer applies
+the way it used to.
 
-1. Fork `github.com/Helium314/HeliBoard`, clone it locally (this environment
-   has no network access, so that clone has to happen on your own machine).
-2. Copy its `app/` module source into this module under its own package
-   (e.g. `com.vaultkey.ime.heliboard`), keeping its GPL-3.0 license file —
-   this module is the GPL-3.0 boundary described in
-   `01-research-open-source-keyboard.md`.
-3. In the fork's `LatinIME` class:
-   - In `onStartInputView(editorInfo, restarting)`, add a call to
-     `credentialInjector.onFieldFocused(editorInfo)` (construct the injector
-     once in `onCreate()`, same pattern as `SimpleVaultIME.onCreate()`).
-   - In `onFinishInputView(finishingInput)`, add
-     `credentialInjector.clearSuggestions()`.
-   - Find the fork's suggestion-strip rendering call (search for where it
-     renders dictionary word suggestions — typically something like
-     `setSuggestedWords(...)` on its `SuggestionStripView`) and add a
-     branch that instead renders `CredentialChip` entries as pill-style
-     views when the injector's callback fires with a non-empty list, using
-     the same visual treatment as the dictionary suggestions.
-   - On a chip tap, call `injector.credentialFor(chipId)` and commit the
-     right field (username or password, based on the currently focused
-     field's `EditorInfo.inputType`) via `currentInputConnection`.
-4. Delete `SimpleVaultIME.kt` and repoint `keyboard/src/main/AndroidManifest.xml`'s
-   `<service>` entry at the fork's IME class instead.
-5. `CredentialSuggestionInjector.kt` and `CredentialChip` do not need to
-   change — that was the point of keeping them separate from the typing
-   surface from the start.
+## What "production typing" means now, and the options
+
+The current keyboard has no autocorrect, no dictionaries, no gesture typing,
+no non-English layouts — it's a functional QWERTY grid with a suggestion
+strip, nothing more. Closing that gap now has two real paths, not one:
+
+**Option A — build typing features in Dart.** Autocorrect and dictionary
+suggestions are genuinely implementable in Dart (they're fundamentally
+string-matching/scoring algorithms, not OS-level features) — but it's a
+large, from-scratch undertaking with no existing open-source Dart keyboard
+engine to fork the way HeliBoard let the native version fork one. Gesture
+typing (swipe-to-type) is a harder, more specialized algorithm and would be
+the most work to build from scratch.
+
+**Option B — revert the typing surface to native, keep Flutter for the
+suggestion strip only.** `SimpleVaultIME.kt` (kept, unregistered, in this
+module) plus a real HeliBoard fork could still handle the actual QWERTY
+grid/typing, while the credential-suggestion chip specifically renders via
+a small embedded `FlutterView` just for that one strip. This gets HeliBoard's
+production typing quality back while keeping *some* Flutter in the keyboard,
+as a middle ground between the two "everything" extremes already tried.
+
+**Neither of these is started.** This file is intentionally a decision
+record, not a build — pick a direction before investing further here, given
+how much the answer changes what gets built next.
+
+## What every version keeps unchanged
+`CredentialSuggestionInjector.kt` and `CredentialChip` never depend on which
+of the above gets chosen — they only need whatever's currently the input
+surface to call `onFieldFocused()`/`clearSuggestions()` and render whatever
+chip list comes back. That boundary held through both the native-only and
+Flutter-rendered versions already, and should hold through whichever of
+Option A/B comes next too.

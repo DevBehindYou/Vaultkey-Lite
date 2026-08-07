@@ -1,20 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      No <service> registered here anymore. This module is now a pure-Kotlin
+      logic library (CredentialSuggestionInjector + CredentialChip) — the
+      actual InputMethodService moved to android/app as FlutterVaultIME,
+      alongside MainActivity, because that's the one module the Flutter
+      Gradle plugin is applied to and can correctly resolve the Flutter
+      engine dependency for. See INTEGRATION.md for the full explanation.
 
-    <application>
-        <service
-            android:name="com.vaultkey.ime.SimpleVaultIME"
-            android:label="VaultKey Keyboard"
-            android:permission="android.permission.BIND_INPUT_METHOD"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.view.InputMethod" />
-            </intent-filter>
-            <meta-data
-                android:name="android.view.im"
-                android:resource="@xml/method" />
-        </service>
-    </application>
+      SimpleVaultIME.kt still lives in this module's source as an
+      unregistered reference implementation of a pure-native keyboard, kept
+      in case the Flutter-rendered approach ever needs to be reverted — see
+      PHASES.md's Phase 6 notes.
 
-    <!-- No INTERNET permission here either — see vault-core's manifest note. -->
+      Still no INTERNET permission here either — see vault-core's manifest note.
+    -->
 </manifest>

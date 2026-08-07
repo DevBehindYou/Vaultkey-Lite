@@ -13,7 +13,7 @@ but the file references below point at the current Dart implementation.
 |---|---|---|---|
 | 1 | Unlock / create vault | `lib/screens/unlock_screen.dart` | SCR.01 |
 | 2 | Vault list + search + detail dialog | `lib/screens/vault_list_screen.dart` | SCR.02 |
-| 3 | Suggestion popup (in-keyboard, not a screen) | `android/keyboard/.../SimpleVaultIME.kt` — **restyled this session**, see below | SCR.03 |
+| 3 | Suggestion popup (in-keyboard, not a screen) | `lib/keyboard/keyboard_app.dart` (Flutter-rendered as of Phase 6 — was native Kotlin) | SCR.03 — matched directly against the reference screenshot (dark suggestion bar, blue pill chip with leading dot, white/gray key styling) rather than approximated |
 | 4 | Add login | `lib/screens/add_edit_screen.dart` | SCR.04 — same divergence as before: two explicit optional match fields (website domain, app package) rather than guessing from one field. |
 | 5 | Settings | `lib/screens/settings_screen.dart` | SCR.05 |
 
@@ -22,23 +22,25 @@ but the file references below point at the current Dart implementation.
 the "tapping a row does nothing" gap noted in the pre-Flutter version of
 this document. There's still no separate **edit** flow (only add + view).
 
-## Keyboard restyle (this session)
+## Keyboard: two restyle passes this project went through
 
-Direct feedback was that the keyboard "looked worst, not like Google
-keyboard." `SimpleVaultIME` was rebuilt with:
-- Rounded key backgrounds with a real pressed-state color (via
-  `GradientDrawable` + `StateListDrawable`, no XML drawables needed)
-- 48dp key height (previously 46dp — this also closes the touch-target gap
-  noted below in the original review)
-- A staggered middle row (`a s d f g h j k l` inset from the edges, matching
-  real keyboards instead of a flush grid)
-- Haptic feedback on every key press
-- A language label on the spacebar ("English (US)"), matching Gboard's convention
-- A pill-shaped, icon-prefixed suggestion chip instead of a flat rectangle
+First pass (native Kotlin, `SimpleVaultIME.kt`, kept unregistered for
+reference): rounded keys, real pressed-state colors, 48dp height, haptics —
+a Gboard-*inspired* look, in response to "looked worst, not like Google
+keyboard."
 
-Still a Phase 2a proof-of-concept for the suggestion mechanism, not
-production typing (no autocorrect/gestures/other languages) — see
-`keyboard/FORK_NOTES.md`.
+Second pass (this session, Flutter-rendered, `lib/keyboard/keyboard_app.dart`,
+the active version): per a follow-up request to match a specific reference
+screenshot exactly, the keyboard was rebuilt pixel-for-pixel against that
+image — a near-black suggestion bar, a blue pill-shaped chip with a small
+leading white dot and bold white label, white letter keys, gray special keys
+(shift/backspace/123/go), the same staggered middle row and 48dp key height.
+
+Still a proof-of-concept for the suggestion mechanism, not production typing
+(no autocorrect/gestures/other languages) — see `PHASES.md`'s Phase 6 notes
+on what "production typing" even means now that the keyboard is
+Flutter-rendered, since the original `keyboard/FORK_NOTES.md` plan assumed a
+fully-native keyboard shell.
 
 ## Navigation flow
 
@@ -65,14 +67,13 @@ library was built — deliberate, given the small screen count):
 - `FloatingActionButton` — add-credential entry point
 - `TopAppBar` — every screen's header
 
-Two components exist **only** inside the keyboard module, built from raw
-`View`s rather than Compose (the keyboard surface is a separate rendering
-world from the app's Compose UI):
+Two components exist **only** inside the keyboard's own Flutter engine
+(`lib/keyboard/keyboard_app.dart`), a separate rendering world from the
+vault app's Flutter engine even though both are Dart:
 
-- The QWERTY key grid (`SimpleVaultIME.keyRow`)
-- The credential suggestion chip (`SimpleVaultIME.renderSuggestions`) — a
-  `TextView` styled to look like a pill/chip, matching the blue accent color
-  from the mockup
+- The QWERTY key grid (`_KeyButton` + `_keyRow`)
+- The credential suggestion chip (`_SuggestionPill`) — matches the blue
+  accent color and pill shape from the reference screenshot directly
 
 ## Design tokens
 
@@ -123,9 +124,9 @@ loading indicator on `VaultListScreen`'s initial `LaunchedEffect` fetch.
   reveal/hide toggle (the `Icons.visibility`/`visibility_off` button) — this
   closes the "no show-password toggle" gap noted previously, though only for
   viewing a saved credential, not for the add-login form's password field.
-- Touch targets: the keyboard's `SimpleVaultIME` keys are now `48dp` tall
-  (bumped from `46dp` in this session's restyle — see the note above) — at
-  Android's recommended minimum, no longer just under it.
+- Touch targets: the active keyboard's Dart `_KeyButton` widgets are `48dp`
+  tall — at Android's recommended minimum, not just under it as in an
+  earlier draft.
 
 ## Mobile-optimization review
 
@@ -138,12 +139,17 @@ What's already handled well:
 - `ListView.builder` in `VaultListScreen` — correct choice for a potentially
   long list, avoids inflating every row up front (same reasoning as the old
   `LazyColumn`).
-- The keyboard view is still built from lightweight native `View`s, not
-  Flutter or Compose — correct call, unchanged by this migration, since
-  `InputMethodService` input views need to be as lightweight/fast to
-  inflate as possible and have no relationship to the app's UI framework.
 
 What's not yet addressed:
+- **Keyboard first-show latency/memory** — the keyboard is now
+  Flutter-rendered (`FlutterView` hosted inside `FlutterVaultIME`), which
+  reverses the earlier native-`View`s choice on direct request. This is
+  **not** a performance win: a second Flutter engine running inside the
+  keyboard process is heavier and slower to first-show than lightweight
+  native `View`s. Explicitly accepted as a tradeoff (see `PHASES.md`'s
+  Phase 6), not an oversight — but genuinely "not yet addressed" in the
+  sense that no actual latency measurement has been taken, since nothing
+  in this project has run on a device yet.
 - No landscape-orientation testing/consideration — the keyboard's key grid
   in particular would need different sizing in landscape (this is normal
   even for production keyboards, but worth flagging as untested here).

@@ -171,3 +171,68 @@ to anything in `vault-core`/`keyboard`/`autofill`, which are unchanged and
 already had a full review pass), that's the most likely place — start
 there, and the error message from `flutter build apk` will usually name the
 exact line.
+
+## Phase 6 — Flutter-rendered keyboard — done this session, highest-risk part of the whole project
+Direct request: "I want the full app in Flutter, Dart, not Kotlin." The
+honest technical answer (also given directly in chat): a system keyboard's
+*service registration* can't be anything but Kotlin/Java — `InputMethodService`
+is an Android OS class with no Dart binding, on any Flutter app, by anyone.
+What changed instead:
+
+- **`FlutterVaultIME`** (`android/app/src/main/kotlin/com/vaultkey/app/FlutterVaultIME.kt`)
+  replaces `SimpleVaultIME` as the registered keyboard service. It is
+  intentionally as small as possible: it creates/caches a `FlutterEngine`,
+  hosts a `FlutterView` as the input view, and relays exactly four things
+  across a `MethodChannel` (`commitText`, `deleteSurroundingText`,
+  `performEditorAction`, `insertCredential`) — everything else about how the
+  keyboard looks and behaves is Dart.
+- **`lib/keyboard/keyboard_app.dart`** — a second Flutter entrypoint
+  (`keyboardMain()`, separate from the vault app's `main()`) rendering the
+  entire keyboard: keys, colors, the suggestion strip, all of it. Restyled
+  to match the reference screenshot exactly (dark suggestion bar, blue
+  pill-shaped chip with a leading dot, white letter keys, gray special keys)
+  rather than the earlier Gboard-inspired-but-not-identical version.
+- **`SimpleVaultIME.kt` kept, unregistered**, as a reference pure-native
+  implementation — `android/keyboard/src/main/AndroidManifest.xml` no longer
+  registers any `<service>` at all; `FlutterVaultIME`'s registration lives in
+  `android/app`'s manifest instead. See `INTEGRATION.md` for why the service
+  class had to move modules (avoiding a fragile hand-pinned Flutter-engine
+  dependency version in a module the Flutter Gradle plugin isn't applied to).
+- **`android/keyboard` is now a pure-logic library** — `CredentialSuggestionInjector`
+  and `CredentialChip` only. No Flutter, no registered service.
+
+### Why this is genuinely the riskiest part of the project so far
+Every other native piece in this project (`vault-core`, `autofill`,
+`MainActivity`'s Flutter hosting) uses well-documented, heavily-trodden
+Flutter/Android APIs. Hosting a `FlutterEngine`/`FlutterView` inside an
+`InputMethodService` — a `Service`, not an `Activity` or `Fragment` — is a
+far less common pattern. Flutter's own "add-to-app" documentation focuses on
+Activity/Fragment hosts; the APIs used here (`FlutterEngine`, `FlutterView`,
+manually driving `lifecycleChannel.appIsResumed()`/`appIsInactive()` since
+there's no Activity lifecycle to infer it from) are real and used exactly
+this way in the several third-party "Flutter keyboard" experiments that
+exist, but this combination has had **no compiler or device in the loop**
+here at all. If something in this whole project doesn't work on first
+build, this file is the most likely place — specifically the engine
+lifecycle calls and the two-entrypoint compilation setup (see the comment
+in `lib/main.dart` about why `keyboard_app.dart` must be imported from
+`main.dart` even though it's never called from there).
+
+### Known cost, confirmed and accepted
+A second Flutter engine now runs inside the keyboard's process whenever it's
+open. It's created once and cached for the process lifetime specifically so
+this cost is paid once, not on every keyboard-open — but the very first time
+the keyboard appears after the app/keyboard process starts will be slower
+than a native keyboard, and the memory footprint is higher for as long as
+the keyboard is in use. This tradeoff was explained and explicitly accepted
+before doing this work.
+
+### What this means for keyboard/FORK_NOTES.md's HeliBoard plan
+That plan assumed a fully-native keyboard shell. It's now moot for the
+*visual/typing* layer, which is Dart — but HeliBoard's actual value
+(autocorrect, dictionaries, gesture typing, non-English layouts) has no Dart
+equivalent to fall back on. Production-quality typing now means either (a)
+building that logic from scratch in Dart, which is a large, separate
+undertaking, or (b) reconsidering the Flutter-rendered approach for the
+*typing surface* specifically while keeping Flutter for the suggestion
+strip only. Not resolved here — flagging as the next real decision point.

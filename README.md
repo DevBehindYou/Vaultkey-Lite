@@ -1,9 +1,14 @@
-# VaultKey — full project (Flutter UI + native Android core)
+# VaultKey — full project (Flutter UI + a thin native Android core)
 
-**Update:** the vault UI has been rewritten in Flutter/Dart, per your
-request. The keyboard and Autofill service stay native Kotlin/Android — see
-`IOS_NOTES.md` and the note below for exactly why those two can't be Flutter.
-The old all-native-Android version (Compose UI) is archived, not deleted, in
+**Update:** per direct request, this now goes as far into Flutter as an
+Android app of this kind can go — the vault UI *and* the keyboard's visuals
+are both Dart/Flutter. What's left in Kotlin is the unavoidable minimum:
+registering the keyboard and Autofill service with Android (system APIs
+with no Dart equivalent, for any Flutter app), and the encryption/database
+layer (working, security-critical code with no reason to rewrite). See the
+table below, and `PHASES.md`'s Phase 6 section for the full story —
+including a real performance/memory tradeoff that came with pushing the
+keyboard this far. The old Compose UI is archived, not deleted, in
 `legacy_compose_ui/app-compose-reference/`.
 
 **Nothing here has been compiled** — this sandbox still has no Flutter SDK,
@@ -14,27 +19,28 @@ needs a real `flutter pub get` / CI run to catch any typos or API mismatches.
 
 | Layer | Language | Why |
 |---|---|---|
-| Vault UI (unlock, list, add login, settings) | **Dart/Flutter** (`lib/`) | What you asked to move to Flutter — one shared UI codebase, ready for iOS later. |
-| Keyboard (`SimpleVaultIME`) | **Kotlin** (`android/keyboard`) | `InputMethodService` is an Android-only system API; Flutter cannot implement a system keyboard. |
-| Autofill service | **Kotlin** (`android/autofill`) | Same reasoning — `AutofillService` is Android-only. |
-| Encryption/database | **Kotlin** (`android/vault-core`) | No reason to rewrite working, security-critical code — Flutter's Dart side talks to it over a `MethodChannel`. |
+| Vault UI (unlock, list, add login, settings) | **Dart/Flutter** (`lib/`) | One shared UI codebase, ready for iOS later. |
+| Keyboard visuals + logic (keys, suggestion strip, all styling) | **Dart/Flutter** (`lib/keyboard/`) | Rendered inside a Flutter engine hosted by a thin native shell — see below. |
+| Keyboard's OS registration | **Kotlin** (`android/app/.../FlutterVaultIME.kt`, ~150 lines) | `InputMethodService` is an Android-only system class; no Flutter app, by anyone, can implement it in Dart. This file is the entire native footprint of the keyboard. |
+| Autofill service | **Kotlin** (`android/autofill`) | Same reasoning as above — `AutofillService` is Android-only, and it has no UI of its own to move to Flutter regardless (the OS renders the suggestion dropdown itself). |
+| Encryption/database | **Kotlin** (`android/vault-core`) | Security-critical, unchanged, working code — no reason to rewrite it. Both Flutter engines talk to it over their own `MethodChannel`. |
 
-The Dart UI and the native Kotlin core talk to each other through a single
-`MethodChannel` (`com.vaultkey.app/vault`), implemented in
-`android/app/src/main/kotlin/com/vaultkey/app/MainActivity.kt` on the native
-side and `lib/services/vault_channel.dart` on the Dart side. See
-`INTEGRATION.md` for the full list of channel methods and
-`DATA_FLOW.md` for sequence diagrams.
+This is genuinely as far into Flutter as this app can go — see
+`PHASES.md`'s Phase 6 section for exactly why, and for the real
+performance/memory tradeoff that came with pushing the keyboard this far
+(a second Flutter engine now runs inside the keyboard process).
 
 ## Project layout
 
 ```
 vaultkey/
-├── pubspec.yaml, lib/            — Flutter/Dart: the vault UI
+├── pubspec.yaml, lib/
+│   ├── main.dart, screens/, services/  — Flutter/Dart: the vault app UI
+│   └── keyboard/                       — Flutter/Dart: the keyboard UI (separate entrypoint, keyboardMain())
 ├── android/
-│   ├── app/                      — Flutter's Android host (FlutterFragmentActivity + MethodChannel bridge)
+│   ├── app/                      — FlutterFragmentActivity (vault UI host) + FlutterVaultIME (keyboard host) — both Flutter hosts live here, see INTEGRATION.md for why
 │   ├── vault-core/                — encryption, Room+SQLCipher database, repository (unchanged)
-│   ├── keyboard/                  — SimpleVaultIME + suggestion-injector glue (unchanged, just restyled — see PHASES.md)
+│   ├── keyboard/                  — CredentialSuggestionInjector + CredentialChip only — pure logic, no UI, no registered service (SimpleVaultIME.kt kept here unregistered, for reference)
 │   └── autofill/                  — VaultAutofillService (unchanged)
 └── legacy_compose_ui/
     └── app-compose-reference/     — the pre-Flutter, all-native Compose UI, kept for reference/rollback

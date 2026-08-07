@@ -1,0 +1,14 @@
+# Normalise line endings to LF in the repo so the tree is byte-identical across
+# Windows/macOS/Linux checkouts (this repo is developed on both).
+* text=auto eol=lf
+
+# Windows helper scripts must keep CRLF to run correctly.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never munge binaries.
+*.png binary
+*.jpg binary
+*.jks binary
+*.keystore binary
+*.jar binary
