@@ -11,7 +11,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverter
 import androidx.room.TypeConverters
 import androidx.room.Update
-import net.zetetic.database.sqlcipher.SupportFactory
+import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 
 @Dao
 interface CredentialDao {
@@ -72,12 +72,17 @@ abstract class VaultDatabase : RoomDatabase() {
          * — never hardcoded, never logged.
          */
         fun build(context: Context, passphrase: ByteArray): VaultDatabase {
-            // net.zetetic:sqlcipher-android's SupportFactory zeroes the
-            // passphrase array once the DB is opened (clearPassphrase defaults
-            // to true). Hand it a throwaway clone so it does NOT wipe the live
-            // session key held in VaultSession.rawDbKey (and the FieldCipher
-            // derived from it) out from under us on the first query.
-            val factory = SupportFactory(passphrase.clone())
+            // net.zetetic:sqlcipher-android does NOT auto-load its native
+            // library (libsqlcipher.so) — the caller must, before the factory
+            // opens any database. loadLibrary is idempotent, so calling it on
+            // every build() is a cheap no-op after the first load.
+            System.loadLibrary("sqlcipher")
+            // SupportOpenHelperFactory zeroes the passphrase array once the DB
+            // is opened (clearPassphrase defaults to true). Hand it a throwaway
+            // clone so it does NOT wipe the live session key held in
+            // VaultSession.rawDbKey (and the FieldCipher derived from it) out
+            // from under us on the first query.
+            val factory = SupportOpenHelperFactory(passphrase.clone())
             return Room.databaseBuilder(context, VaultDatabase::class.java, "vault.db")
                 .openHelperFactory(factory)
                 // NO destructive fallback: a version bump without a matching
