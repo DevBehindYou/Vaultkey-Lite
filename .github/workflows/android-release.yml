@@ -38,8 +38,9 @@ jobs:
           cp /tmp/wrapper_bootstrap/android/gradlew android/gradlew
           cp /tmp/wrapper_bootstrap/android/gradlew.bat android/gradlew.bat
           mkdir -p android/gradle/wrapper
-          cp /tmp/wrapper_bootstrap/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
           cp /tmp/wrapper_bootstrap/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.jar
+          # Pin Gradle 8.9 (AGP 8.7.2 requires >= 8.9) — same rationale as android-ci.yml.
+          printf 'distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-bin.zip\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' > android/gradle/wrapper/gradle-wrapper.properties
           chmod +x android/gradlew
 
       # --- Signing: decode the keystore from a base64 secret ---

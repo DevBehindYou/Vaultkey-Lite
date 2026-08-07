@@ -62,11 +62,15 @@ jobs:
           cp /tmp/wrapper_bootstrap/android/gradlew android/gradlew
           cp /tmp/wrapper_bootstrap/android/gradlew.bat android/gradlew.bat
           mkdir -p android/gradle/wrapper
-          cp /tmp/wrapper_bootstrap/android/gradle/wrapper/gradle-wrapper.properties android/gradle/wrapper/gradle-wrapper.properties
           cp /tmp/wrapper_bootstrap/android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.jar
+          # Pin Gradle 8.9 explicitly: AGP 8.7.2 (this project's pinned AGP)
+          # requires Gradle >= 8.9, but the Flutter-shipped template wrapper
+          # pins an older Gradle. The wrapper jar is version-agnostic — it just
+          # downloads whatever distributionUrl names.
+          printf 'distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.9-bin.zip\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' > android/gradle/wrapper/gradle-wrapper.properties
           chmod +x android/gradlew
 
-      - name: Android unit tests (vault-core: crypto round-trip tests)
+      - name: "Android unit tests (vault-core crypto round-trip tests)"
         run: |
           cd android
           chmod +x gradlew
