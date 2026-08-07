@@ -29,7 +29,7 @@ jobs:
           cache: true
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
@@ -37,12 +37,12 @@ jobs:
       - name: flutter pub get
         run: flutter pub get
 
-      # Advisory for now (continue-on-error) so a formatting nit never blocks a
-      # build. Once the tree has been through `dart format .` once, flip this to
-      # a hard gate by removing continue-on-error.
-      - name: Check formatting (dart format)
-        continue-on-error: true
-        run: dart format --output=none --set-exit-if-changed .
+      # Informational only: lists any files that aren't `dart format`-clean but
+      # never fails the build (no --set-exit-if-changed). Once someone runs
+      # `dart format .` and commits the result, add --set-exit-if-changed here
+      # to turn this into a hard gate.
+      - name: Check formatting (dart format, advisory)
+        run: dart format --output=none .
 
       - name: flutter analyze
         run: flutter analyze

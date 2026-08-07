@@ -28,6 +28,13 @@ plugins {
     // see PHASES.md for why these three were checked against official
     // compatibility tables rather than guessed.
     id("com.android.application") version "8.7.2" apply false
+    // Declared here (with the version) and applied WITHOUT a version in the
+    // library modules. When the Flutter plugin loader is active it puts AGP on
+    // the classpath with an "unknown version"; a module re-requesting AGP *with*
+    // a version (the old `alias(libs.plugins.android.library)`) then fails with
+    // "already on the classpath with an unknown version". Applying by bare id
+    // resolves against this declaration instead. Same pattern the app uses.
+    id("com.android.library") version "8.7.2" apply false
     id("org.jetbrains.kotlin.android") version "2.0.21" apply false
     // The Compose compiler plugin was dropped with the Flutter migration — no
     // module in this build applies Compose anymore (the archived

@@ -1,7 +1,11 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.ksp)
+    // Applied by bare id (versions declared in settings.gradle.kts) so they
+    // don't clash with the Flutter plugin loader's classpath — see the note
+    // there. Was previously alias(libs.plugins.*), which pinned a version and
+    // broke the build under Flutter's Gradle setup.
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
+    id("com.google.devtools.ksp")
 }
 
 android {

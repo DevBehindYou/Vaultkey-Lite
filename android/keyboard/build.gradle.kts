@@ -1,6 +1,9 @@
 plugins {
-    alias(libs.plugins.android.library)
-    alias(libs.plugins.kotlin.android)
+    // Bare id (versions in settings.gradle.kts) — see the note there and in
+    // vault-core/build.gradle.kts for why alias(libs.plugins.*) can't be used
+    // under Flutter's Gradle plugin loader.
+    id("com.android.library")
+    id("org.jetbrains.kotlin.android")
 }
 
 android {
