@@ -62,11 +62,16 @@ class CredentialSuggestionInjector(
 
     private fun looksLikeLoginField(info: EditorInfo): Boolean {
         val variation = info.inputType and android.text.InputType.TYPE_MASK_VARIATION
+        // Note: Android has no "username" input-type variation — there is no
+        // TYPE_TEXT_VARIATION_USERNAME. Username fields are surfaced through
+        // autofill hints (handled by VaultAutofillService), not InputType, so
+        // the IME strip keys off the password/email variations plus the
+        // visible-password one.
         return variation == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
             variation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
             variation == android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS ||
-            variation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS ||
-            variation == android.text.InputType.TYPE_TEXT_VARIATION_USERNAME
+            variation == android.text.InputType.TYPE_TEXT_VARIATION_WEB_EMAIL_ADDRESS
     }
 }
 
