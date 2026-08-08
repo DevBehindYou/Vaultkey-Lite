@@ -89,7 +89,15 @@ class FlutterVaultIME : InputMethodService() {
                         if (credential != null) {
                             currentInputConnection?.commitText(credential.username, 1)
                             // Record usage so "recently used" ordering can work.
-                            serviceScope.launch { VaultKeyGraph.credentialRepository.markUsed(credential.id) }
+                            // Guarded: markUsed hits the DB, which throws if the
+                            // vault locked since the suggestion was shown.
+                            serviceScope.launch {
+                                try {
+                                    VaultKeyGraph.credentialRepository.markUsed(credential.id)
+                                } catch (e: Exception) {
+                                    // Vault locked between show and tap — ignore.
+                                }
+                            }
                         }
                         result.success(null)
                     }

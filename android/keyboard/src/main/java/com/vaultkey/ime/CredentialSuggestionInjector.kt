@@ -42,9 +42,19 @@ class CredentialSuggestionInjector(
         val packageName = editorInfo.packageName ?: run { clearSuggestions(); return }
 
         scope.launch {
-            val matches = repository.findForPackageName(packageName)
-            activeCredentials = matches.associateBy { it.id }
-            onSuggestionsReady(matches.map { CredentialChip(id = it.id, label = it.label) })
+            try {
+                val matches = repository.findForPackageName(packageName)
+                activeCredentials = matches.associateBy { it.id }
+                onSuggestionsReady(matches.map { CredentialChip(id = it.id, label = it.label) })
+            } catch (e: Exception) {
+                // The vault is locked — currentDatabase() throws "Vault is locked"
+                // — or the lookup otherwise failed. Show no suggestions instead of
+                // letting the exception crash the keyboard/app process. The
+                // keyboard must keep working as a plain keyboard while locked;
+                // suggestions only make sense once the vault is unlocked.
+                activeCredentials = emptyMap()
+                onSuggestionsReady(emptyList())
+            }
         }
 
         // Web-domain matching for browsers is intentionally NOT done here — a

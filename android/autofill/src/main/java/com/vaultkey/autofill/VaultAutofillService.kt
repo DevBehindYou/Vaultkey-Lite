@@ -61,29 +61,35 @@ class VaultAutofillService : AutofillService() {
         }
 
         serviceScope.launch {
-            val domain = fields.webDomain
-            val matches = if (domain != null) {
-                VaultKeyGraph.credentialRepository.findForWebDomain(domain)
-            } else emptyList()
+            try {
+                val domain = fields.webDomain
+                val matches = if (domain != null) {
+                    VaultKeyGraph.credentialRepository.findForWebDomain(domain)
+                } else emptyList()
 
-            if (matches.isEmpty()) {
-                callback.onSuccess(null)
-                return@launch
-            }
-
-            val response = FillResponse.Builder().apply {
-                matches.forEach { credential ->
-                    addDataset(buildDataset(credential, fields))
-                    // For API 30+, attach an InlinePresentation built from
-                    // request.inlineSuggestionsRequest here as well, so the
-                    // same dataset also renders inside the keyboard strip
-                    // instead of (or in addition to) the dropdown. Omitted
-                    // from this reference version — see developer.android.com
-                    // /guide/topics/text/ime-autofill for the exact builder.
+                if (matches.isEmpty()) {
+                    callback.onSuccess(null)
+                    return@launch
                 }
-            }.build()
 
-            callback.onSuccess(response)
+                val response = FillResponse.Builder().apply {
+                    matches.forEach { credential ->
+                        addDataset(buildDataset(credential, fields))
+                        // For API 30+, attach an InlinePresentation built from
+                        // request.inlineSuggestionsRequest here as well, so the
+                        // same dataset also renders inside the keyboard strip
+                        // instead of (or in addition to) the dropdown. Omitted
+                        // from this reference version — see developer.android.com
+                        // /guide/topics/text/ime-autofill for the exact builder.
+                    }
+                }.build()
+
+                callback.onSuccess(response)
+            } catch (e: Exception) {
+                // Vault locked mid-request (raced the state check above) or the
+                // lookup failed — return no fill data rather than crashing.
+                callback.onSuccess(null)
+            }
         }
     }
 
