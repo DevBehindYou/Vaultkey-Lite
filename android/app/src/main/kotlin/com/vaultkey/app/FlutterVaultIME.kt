@@ -118,6 +118,11 @@ class FlutterVaultIME : InputMethodService() {
         // inset the Dart SafeArea reserves at the bottom.
         val keyboardHeightPx = (330 * resources.displayMetrics.density).toInt()
         return FrameLayout(this).apply {
+            // Opaque keyboard-gray background: a FlutterTextureView preserves its
+            // alpha channel, so any pixel the Flutter scene doesn't paint (and
+            // the moment before its first frame) would otherwise show the app
+            // behind the keyboard through. This matches _KeyboardColors.keysBackground.
+            setBackgroundColor(0xFFDCDAD5.toInt())
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
