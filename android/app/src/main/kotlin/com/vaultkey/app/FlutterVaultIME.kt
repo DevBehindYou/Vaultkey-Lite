@@ -3,9 +3,11 @@ package com.vaultkey.app
 import android.inputmethodservice.InputMethodService
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.FrameLayout
 import com.vaultkey.core.VaultKeyGraph
 import com.vaultkey.ime.CredentialChip
 import com.vaultkey.ime.CredentialSuggestionInjector
+import io.flutter.embedding.android.FlutterTextureView
 import io.flutter.embedding.android.FlutterView
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.embedding.engine.dart.DartExecutor
@@ -96,14 +98,35 @@ class FlutterVaultIME : InputMethodService() {
             }
         }
 
-        val view = FlutterView(this).apply { attachToFlutterEngine(engine) }
+        // TextureView-backed FlutterView, NOT the default SurfaceView one: a
+        // SurfaceView renders solid black inside an InputMethodService window
+        // (its surface isn't composited within the IME window's z-order — that
+        // was the full-screen black keyboard). A TextureView draws into the
+        // normal view hierarchy, so the Flutter UI shows correctly.
+        val view = FlutterView(this, FlutterTextureView(this)).apply { attachToFlutterEngine(engine) }
         flutterView = view
         // No Activity lifecycle exists in a Service, so the engine's own
         // lifecycle notion has to be driven by hand — this tells Flutter's
         // framework "you're visible and should render," which it otherwise
         // infers automatically from an Activity's onResume/onPause.
         engine.lifecycleChannel.appIsResumed()
-        return view
+
+        // Constrain the input view height. Returned bare, the FlutterView expands
+        // to fill the whole IME window (the full-screen keyboard); an IME input
+        // view must be only as tall as the keyboard. ~330dp matches the Dart
+        // layout (suggestion strip + four key rows) plus room for the gesture
+        // inset the Dart SafeArea reserves at the bottom.
+        val keyboardHeightPx = (330 * resources.displayMetrics.density).toInt()
+        return FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+            )
+            addView(
+                view,
+                FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, keyboardHeightPx),
+            )
+        }
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
